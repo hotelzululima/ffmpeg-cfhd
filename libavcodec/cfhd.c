@@ -39,13 +39,11 @@ static av_cold int cfhd_decode_init(AVCodecContext *avctx)
 {
     CFHDContext *s = avctx->priv_data;
 
-    ff_cfhd_init_vlcs(s);
-
     avctx->pix_fmt             = AV_PIX_FMT_YUV422P10;
     avctx->bits_per_raw_sample = 10;
     s->avctx                   = avctx;
 
-    return 0;
+    return ff_cfhd_init_vlcs(s);
 }
 
 static void init_plane_defaults(CFHDContext *s)
@@ -525,8 +523,10 @@ static av_cold int cfhd_close_decoder(AVCodecContext *avctx)
 {
     CFHDContext *s = avctx->priv_data;
 
-    ff_free_vlc(&s->vlc_9);
-    ff_free_vlc(&s->vlc_18);
+    if (!avctx->internal->is_copy) {
+        ff_free_vlc(&s->vlc_9);
+        ff_free_vlc(&s->vlc_18);
+    }
 
     return 0;
 }
@@ -540,5 +540,6 @@ AVCodec ff_cfhd_decoder = {
     .init           = cfhd_decode_init,
     .close          = cfhd_close_decoder,
     .decode         = cfhd_decode,
-    .capabilities   = AV_CODEC_CAP_EXPERIMENTAL,
+    .capabilities   = AV_CODEC_CAP_EXPERIMENTAL | AV_CODEC_CAP_DR1 | AV_CODEC_CAP_FRAME_THREADS,
+    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE | FF_CODEC_CAP_INIT_CLEANUP,
 };

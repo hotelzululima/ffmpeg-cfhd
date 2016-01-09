@@ -373,7 +373,7 @@ static const uint8_t table_18_vlc_level[NB_VLC_TABLE_18] = {
 
 av_cold int ff_cfhd_init_vlcs(CFHDContext *s)
 {
-    int i, j;
+    int i, j, ret = 0;
     uint32_t new_cfhd_vlc_bits[NB_VLC_TABLE_18 * 2];
     uint8_t  new_cfhd_vlc_len[NB_VLC_TABLE_18 * 2];
     uint16_t new_cfhd_vlc_run[NB_VLC_TABLE_18 * 2];
@@ -401,8 +401,10 @@ av_cold int ff_cfhd_init_vlcs(CFHDContext *s)
         }
     }
 
-    init_vlc(&s->vlc_9, VLC_BITS, j, new_cfhd_vlc_len,
-             1, 1, new_cfhd_vlc_bits, 4, 4, 0);
+    ret = init_vlc(&s->vlc_9, VLC_BITS, j, new_cfhd_vlc_len,
+                   1, 1, new_cfhd_vlc_bits, 4, 4, 0);
+    if (ret < 0)
+        goto end;
     for (i = 0; i < s->vlc_9.table_size; i++) {
         int code = s->vlc_9.table[i][0];
         int len  = s->vlc_9.table[i][1];
@@ -440,8 +442,10 @@ av_cold int ff_cfhd_init_vlcs(CFHDContext *s)
         }
     }
 
-    init_vlc(&s->vlc_18, VLC_BITS, j, new_cfhd_vlc_len,
-             1, 1, new_cfhd_vlc_bits, 4, 4, 0);
+    ret = init_vlc(&s->vlc_18, VLC_BITS, j, new_cfhd_vlc_len,
+                   1, 1, new_cfhd_vlc_bits, 4, 4, 0);
+    if (ret < 0)
+        goto end;
     assert(s->vlc_18.table_size == 4572);
 
     for (i = 0; i < s->vlc_18.table_size; i++) {
@@ -461,5 +465,6 @@ av_cold int ff_cfhd_init_vlcs(CFHDContext *s)
         s->table_18_rl_vlc[i].run   = run;
     }
 
-    return 0;
+end:
+    return ret;
 }
