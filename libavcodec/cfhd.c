@@ -250,8 +250,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                 break;
             }
             av_log(avctx, AV_LOG_DEBUG, "Transform-type? %"PRIu16" \n", data);
-        }
-        else if (abstag >= 0x4000 && abstag <= 0x40ff) {
+        } else if (abstag >= 0x4000 && abstag <= 0x40ff) {
             av_log(avctx, AV_LOG_DEBUG, "Small chunk length %"PRIu16" %s \n", data * 4, tag < 0 ? "optional" : "required");
             cnt += data * 4;
         } else if (tag == 23) {
