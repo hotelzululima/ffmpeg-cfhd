@@ -122,31 +122,37 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
     int cnt = 0;
     AVFrame *pic = data;
     int ret = 0, i, j;
-    int16_t *plane[3];
-    int16_t *tmp[3];
+    int16_t *plane[3] = {NULL};
+    int16_t *tmp[3] = {NULL};
     int16_t *subband[3][10] = {{0}};
     int16_t *l_h[3][8];
+    int16_t *coeff_data;
 
     avcodec_get_chroma_sub_sample(avctx->pix_fmt, &s->chroma_x_shift, &s->chroma_y_shift);
 
     for (i = 0; i < 3; i++) {
         int width = i ? avctx->width >> s->chroma_x_shift : avctx->width;
         int height = i ? avctx->height >> s->chroma_y_shift : avctx->height;
-        height = FFALIGN(height / 8, 2) * 8;
         int stride = FFALIGN(width / 8, 8) * 8;
+        int w8, h8, w4, h4, w2, h2;
+        height = FFALIGN(height / 8, 2) * 8;
         s->plane[i].width = width;
         s->plane[i].height = height;
         s->plane[i].stride = stride;
 
-        int w8 = FFALIGN(s->plane[i].width / 8, 8);
-        int h8 = FFALIGN(s->plane[i].height / 8, 2);
-        int w4 = w8 * 2;
-        int h4 = h8 * 2;
-        int w2 = w4 * 2;
-        int h2 = h4 * 2;
+        w8 = FFALIGN(s->plane[i].width / 8, 8);
+        h8 = FFALIGN(s->plane[i].height / 8, 2);
+        w4 = w8 * 2;
+        h4 = h8 * 2;
+        w2 = w4 * 2;
+        h2 = h4 * 2;
 
         plane[i] = av_malloc(height * stride * sizeof(*plane[i]));
-        tmp[i]   = av_malloc(height * stride * sizeof(*plane[i]));
+        tmp[i]   = av_malloc(height * stride * sizeof(*tmp[i]));
+        if (!plane[i] || !tmp[i]) {
+            ret = AVERROR(ENOMEM);
+            goto end;
+        }
 
         subband[i][0] = plane[i];
         subband[i][1] = plane[i] + 2 * w8 * h8;
@@ -283,7 +289,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             av_log(avctx, AV_LOG_DEBUG,  "Unknown tag %i data %x \n", tag, data);
         cnt += 4;
 
-        int16_t *coeff_data = subband[s->channel_num][s->subband_num_actual];
+        coeff_data = subband[s->channel_num][s->subband_num_actual];
 
         /* Lowpass coefficients */
         if (tag == 4 && data == 0xf0f) {
@@ -506,6 +512,8 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         }
     }
 
+
+end:
     for (i = 0; i < 3; i++) {
         av_freep(&plane[i]);
         av_freep(&tmp[i]);
