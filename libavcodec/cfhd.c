@@ -42,7 +42,7 @@ static av_cold int cfhd_decode_init(AVCodecContext *avctx)
     ff_cfhd_init_vlcs(s);
 
     avctx->pix_fmt             = AV_PIX_FMT_YUV422P10;
-    avctx->bits_per_raw_sample = 16;
+    avctx->bits_per_raw_sample = 10;
     s->avctx                   = avctx;
 
     return 0;
