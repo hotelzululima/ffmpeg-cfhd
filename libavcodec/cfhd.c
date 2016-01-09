@@ -335,9 +335,8 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                                VLC_BITS, 3, 1);
 
                     /* escape */
-                    if (level == 64) {
+                    if (level == 64)
                         break;
-                    }
 
                     count += run;
 
