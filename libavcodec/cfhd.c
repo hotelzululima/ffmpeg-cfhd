@@ -509,11 +509,10 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         }
     }
 
-    av_freep(&plane[0]);
-
-    av_freep(&tmp[0]);
-    av_freep(&tmp[1]);
-    av_freep(&tmp[2]);
+    for (i = 0; i < 3; i++) {
+        av_freep(&plane[i]);
+        av_freep(&tmp[i]);
+    }
 
     if (ret < 0)
         return ret;
