@@ -78,49 +78,30 @@ static inline int dequant_and_decompand(int level, int quantisation)
 static inline void filter(int16_t *output, ptrdiff_t out_stride, int16_t *low, ptrdiff_t low_stride,
                           int16_t *high, ptrdiff_t high_stride, int len)
 {
-    int32_t tmp, tmp2;
-    int16_t tmp3, tmp4;
-
-    /* these refer to the coefficients for the *next* iteration */
-    int16_t l_0, l_1, l_2, l_m1, l_m2;
-    int16_t h_0;
+    int32_t tmp;
 
     int i;
     for (i = 0; i < len; i++) {
-        if (i == 0) {
-            l_2  = low[3 * low_stride];
-            l_1  = low[2 * low_stride];
-            l_0  = low[1 * low_stride];
-            l_m1 = low[0 * low_stride];
-            l_m2 = 0;
-            h_0  = high[1 * high_stride];
-
-            tmp   = (11 * l_m1 - 4 * l_0 + l_1 + 4) >> 3;
-            tmp2  = (5 * l_m1 + 4 * l_0 - l_1 + 4) >> 3;
-
-            output[(2 * i + 0) * out_stride] = (tmp + high[0 * high_stride]) >> 1;
-            output[(2 * i + 1) * out_stride] = (tmp2 - high[0 * high_stride]) >> 1;
-        } else if (i == len - 1) {
-            tmp = (5 * l_0 + 4 * l_m1 - l_m2 + 4) >> 3;
-            output[(2 * i + 0) * out_stride] = (tmp + h_0) >> 1;
-            tmp = (11 * l_0 - 4 * l_m1 + l_m2 + 4) >> 3;
-            output[(2 * i + 1) * out_stride] = (tmp - h_0) >> 1;
-        } else {
-            tmp  = (l_m1 - l_1 + 4) >> 3;
-            tmp2 = (l_1 - l_m1 + 4) >> 3;
-
-            tmp3 = (tmp + l_0 + h_0) >> 1;
-            tmp4 = (tmp2 + l_0 - h_0) >> 1;
-
-            l_m2 = l_m1;
-            l_m1 = l_0;
-            l_0  = l_1;
-            l_1  = l_2;
-            l_2  = low[(i + 3) * low_stride];
-            h_0  = high[(i + 1) * high_stride];
-
-            output[(2 * i + 0) * out_stride] = tmp3;
-            output[(2 * i + 1) * out_stride] = tmp4;
+        if( i == 0 )
+        {
+            tmp = (11*low[0*low_stride] - 4*low[1*low_stride] + low[2*low_stride] + 4) >> 3;
+            output[(2*i+0)*out_stride] = (tmp + high[0*high_stride]) >> 1;
+            tmp = ( 5*low[0*low_stride] + 4*low[1*low_stride] - low[2*low_stride] + 4) >> 3;
+            output[(2*i+1)*out_stride] = (tmp - high[0*high_stride]) >> 1;
+        }
+        else if( i == len-1 )
+        {
+            tmp = ( 5*low[i*low_stride] + 4*low[(i-1)*low_stride] - low[(i-2)*low_stride] + 4) >> 3;
+            output[(2*i+0)*out_stride] = (tmp + high[i*high_stride]) >> 1;
+            tmp = (11*low[i*low_stride] - 4*low[(i-1)*low_stride] + low[(i-2)*low_stride] + 4) >> 3;
+            output[(2*i+1)*out_stride] = (tmp - high[i*high_stride]) >> 1;
+        }
+        else
+        {
+            tmp = (low[(i-1)*low_stride] - low[(i+1)*low_stride] + 4) >> 3;
+            output[(2*i+0)*out_stride] = (tmp + low[i*low_stride] + high[i*high_stride]) >> 1;
+            tmp = (low[(i+1)*low_stride] - low[(i-1)*low_stride] + 4) >> 3;
+            output[(2*i+1)*out_stride] = (tmp + low[i*low_stride] - high[i*high_stride]) >> 1;
         }
     }
 }
