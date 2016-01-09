@@ -23,7 +23,6 @@
  * CFHD Video Decoder
  */
 
-#include "libavutil/avassert.h"
 #include "libavutil/buffer.h"
 #include "libavutil/common.h"
 #include "libavutil/intreadwrite.h"

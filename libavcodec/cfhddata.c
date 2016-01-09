@@ -446,7 +446,7 @@ av_cold int ff_cfhd_init_vlcs(CFHDContext *s)
                    1, 1, new_cfhd_vlc_bits, 4, 4, 0);
     if (ret < 0)
         goto end;
-    assert(s->vlc_18.table_size == 4572);
+    av_assert0(s->vlc_18.table_size == 4572);
 
     for (i = 0; i < s->vlc_18.table_size; i++) {
         int code = s->vlc_18.table[i][0];
