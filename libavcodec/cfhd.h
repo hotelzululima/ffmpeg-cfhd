@@ -18,6 +18,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <stdint.h>
+#include "avcodec.h"
 #include "get_bits.h"
 
 #define VLC_BITS 9
@@ -31,9 +33,6 @@ typedef struct CFHD_RL_VLC_ELEM {
 } CFHD_RL_VLC_ELEM;
 
 #define DWT_LEVELS 3
-
-#define CALC_PADDING(size, depth)                       \
-    (((size + (1 << depth) - 1) >> depth) << depth)
 
 typedef struct SubBand {
     int level;
@@ -61,7 +60,7 @@ typedef struct Plane {
     SubBand band[DWT_LEVELS][4];
 } Plane;
 
-typedef struct {
+typedef struct CFHDContext {
     AVCodecContext *avctx;
 
     CFHD_RL_VLC_ELEM table_9_rl_vlc[2088];

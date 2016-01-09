@@ -23,10 +23,6 @@
  * CFHD Video Decoder
  */
 
-#include "avcodec.h"
-#include "bswapdsp.h"
-#include "internal.h"
-#include "cfhd.h"
 #include "libavutil/avassert.h"
 #include "libavutil/buffer.h"
 #include "libavutil/common.h"
@@ -34,7 +30,12 @@
 #include "libavutil/imgutils.h"
 #include "libavutil/opt.h"
 
-static av_cold int cfhd_init_decoder(AVCodecContext *avctx)
+#include "avcodec.h"
+#include "bswapdsp.h"
+#include "internal.h"
+#include "cfhd.h"
+
+static av_cold int cfhd_decode_init(AVCodecContext *avctx)
 {
     CFHDContext *s = avctx->priv_data;
 
@@ -74,8 +75,8 @@ static inline int dequant_and_decompand(int level, int quantisation)
     return (abslevel + ((768 * abslevel * abslevel * abslevel) / (255 * 255 * 255))) * FFSIGN(level) * quantisation;
 }
 
-static inline void filter(int16_t *output, int out_stride, int16_t *low, int low_stride,
-                          int16_t *high, int high_stride, int len)
+static inline void filter(int16_t *output, ptrdiff_t out_stride, int16_t *low, ptrdiff_t low_stride,
+                          int16_t *high, ptrdiff_t high_stride, int len)
 {
     int32_t tmp, tmp2;
     int16_t tmp3, tmp4;
@@ -204,47 +205,46 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         if (abs_tag8 >= 0x60 && abs_tag8 <= 0x6f) {
             av_log(avctx, AV_LOG_DEBUG, "large len %x \n", AV_RB24(&bs[cnt + 1]));
         } else if (tag == 20) {
-            av_log(avctx, AV_LOG_DEBUG, "Width %u %x \n", data, cnt);
+            av_log(avctx, AV_LOG_DEBUG, "Width %"PRIu16" %x \n", data, cnt);
             avctx->width = data;
         } else if (tag == 21) {
-            av_log(avctx, AV_LOG_DEBUG, "Height %u %x \n", data, cnt);
+            av_log(avctx, AV_LOG_DEBUG, "Height %"PRIu16" %x \n", data, cnt);
             avctx->height = data;
         } else if (tag == 101) {
-            av_log(avctx, AV_LOG_DEBUG, "Bits per component: %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Bits per component: %"PRIu16" \n", data);
             s->bpc = data;
         } else if (tag == 12) {
-            av_log(avctx, AV_LOG_DEBUG, "Channel Count: %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Channel Count: %"PRIu16" \n", data);
             s->channel_cnt = data;
             if (data != 3) {
-                av_log(avctx, AV_LOG_ERROR, "Channel Count of %u is unsupported\n", data);
+                av_log(avctx, AV_LOG_ERROR, "Channel Count of %"PRIu16" is unsupported\n", data);
                 ret = AVERROR_PATCHWELCOME;
                 break;
             }
         } else if (tag == 14) {
-            av_log(avctx, AV_LOG_DEBUG, "Subband Count: %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Subband Count: %"PRIu16" \n", data);
             if (data != 10) {
-                av_log(avctx, AV_LOG_ERROR, "Subband Count of %u is unsupported\n", data);
+                av_log(avctx, AV_LOG_ERROR, "Subband Count of %"PRIu16" is unsupported\n", data);
                 ret = AVERROR_PATCHWELCOME;
                 break;
             }
-        }
-        else if (tag == 62) {
+        } else if (tag == 62) {
             s->channel_num = data;
-            av_log(avctx, AV_LOG_DEBUG, "Channel number %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Channel number %"PRIu16" \n", data);
             init_plane_defaults(s);
         } else if (tag == 48) {
             if (s->subband_num != 0 && data == 1)  // hack
                 s->level++;
-            av_log(avctx, AV_LOG_DEBUG, "Subband number %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Subband number %"PRIu16" \n", data);
             s->subband_num = data;
         } else if (tag == 51) {
-            av_log(avctx, AV_LOG_DEBUG, "Subband number actual %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Subband number actual %"PRIu16" \n", data);
             s->subband_num_actual = data;
         } else if (tag == 35)
-            av_log(avctx, AV_LOG_DEBUG, "Lowpass precision bits: %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Lowpass precision bits: %"PRIu16" \n", data);
         else if (tag == 53) {
             s->quantisation = data;
-            av_log(avctx, AV_LOG_DEBUG, "Quantisation: %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Quantisation: %"PRIu16" \n", data);
         } else if (tag == 109) {
             s->prescale_shift[0] = (data >> 0) & 0x7;
             s->prescale_shift[1] = (data >> 3) & 0x7;
@@ -253,22 +253,22 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         } else if (tag == 27) {
             s->plane[s->channel_num].band[0][0].width  = data;
             s->plane[s->channel_num].band[0][0].stride = data;
-            av_log(avctx, AV_LOG_DEBUG, "Lowpass width %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Lowpass width %"PRIu16" \n", data);
         } else if (tag == 28) {
             s->plane[s->channel_num].band[0][0].height = data;
-            av_log(avctx, AV_LOG_DEBUG, "Lowpass height %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Lowpass height %"PRIu16" \n", data);
         } else if (tag == 1)
-            av_log(avctx, AV_LOG_DEBUG, "Sample type? %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Sample type? %"PRIu16" \n", data);
         else if (tag == 10) {
             if (data != 0) {
-                av_log(avctx, AV_LOG_ERROR, "Transform type of %u is unsupported\n", data);
+                av_log(avctx, AV_LOG_ERROR, "Transform type of %"PRIu16" is unsupported\n", data);
                 ret = AVERROR_PATCHWELCOME;
                 break;
             }
-            av_log(avctx, AV_LOG_DEBUG, "Transform-type? %u \n", data);
+            av_log(avctx, AV_LOG_DEBUG, "Transform-type? %"PRIu16" \n", data);
         }
         else if (abstag >= 0x4000 && abstag <= 0x40ff) {
-            av_log(avctx, AV_LOG_DEBUG, "Small chunk length %u %s \n", data * 4, tag < 0 ? "optional" : "required");
+            av_log(avctx, AV_LOG_DEBUG, "Small chunk length %"PRIu16" %s \n", data * 4, tag < 0 ? "optional" : "required");
             cnt += data * 4;
         } else if (tag == 23) {
             av_log(avctx, AV_LOG_DEBUG, "Skip frame \n");
@@ -312,7 +312,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             int lowpass_height = s->plane[s->channel_num].band[0][0].height;
             int lowpass_width  = s->plane[s->channel_num].band[0][0].width;
             uint16_t coeffs    = 0;
-            av_log(avctx, AV_LOG_DEBUG, "Start of lowpass coeffs component %u \n", s->channel_num);
+            av_log(avctx, AV_LOG_DEBUG, "Start of lowpass coeffs component %"PRIu16" \n", s->channel_num);
             for (i = 0; i < lowpass_height; i++) {
                 for (j = 0; j < lowpass_width; j++) {
                     coeff_data[j] = AV_RB16(&bs[cnt]);
@@ -330,7 +330,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                        lowpass_width * sizeof(*coeff_data));
             }
 
-            av_log(avctx, AV_LOG_DEBUG, "Lowpass coefficients %u \n", coeffs);
+            av_log(avctx, AV_LOG_DEBUG, "Lowpass coefficients %"PRIu16" \n", coeffs);
         }
 
         if (tag == 55 && s->subband_num_actual != 255) {
@@ -357,9 +357,8 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
 
                     count += run;
 
-                    if (count > expected) {
+                    if (count > expected)
                         break;
-                    }
 
                     coeff = dequant_and_decompand(level, s->quantisation);
                     for (i = 0; i < run; i++)
@@ -372,15 +371,13 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                                VLC_BITS, 3, 1);
 
                     /* escape */
-                    if (level == 255 && run == 2) {
+                    if (level == 255 && run == 2)
                         break;
-                    }
 
                     count += run;
 
-                    if (count > expected) {
+                    if (count > expected)
                         break;
-                    }
 
                     coeff = dequant_and_decompand(level, s->quantisation);
                     for (i = 0; i < run; i++)
@@ -555,12 +552,12 @@ static av_cold int cfhd_close_decoder(AVCodecContext *avctx)
 }
 
 AVCodec ff_cfhd_decoder = {
-    .name           = "cfhdvideo",
-    .long_name      = NULL_IF_CONFIG_SMALL("cfhd video"),
+    .name           = "cfhd",
+    .long_name      = NULL_IF_CONFIG_SMALL("Cineform HD"),
     .type           = AVMEDIA_TYPE_VIDEO,
     .id             = AV_CODEC_ID_CFHD,
     .priv_data_size = sizeof(CFHDContext),
-    .init           = cfhd_init_decoder,
+    .init           = cfhd_decode_init,
     .close          = cfhd_close_decoder,
     .decode         = cfhd_decode,
     .capabilities   = AV_CODEC_CAP_EXPERIMENTAL,
