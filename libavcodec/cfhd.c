@@ -32,6 +32,7 @@
 #include "avcodec.h"
 #include "bswapdsp.h"
 #include "internal.h"
+#include "bytestream.h"
 #include "cfhd.h"
 
 static av_cold int cfhd_decode_init(AVCodecContext *avctx)
@@ -118,8 +119,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                        AVPacket *avpkt)
 {
     CFHDContext *s = avctx->priv_data;
-    uint8_t *bs = avpkt->data;
-    int cnt = 0;
+    GetByteContext gb;
     AVFrame *pic = data;
     int ret = 0, i, j;
     int16_t *plane[3] = {NULL};
@@ -180,19 +180,23 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
     if ((ret = ff_get_buffer(avctx, pic, 0)) < 0)
         return ret;
 
-    while (cnt < avpkt->size) {
-        int16_t tag     = AV_RB16(&bs[cnt]);
-        int8_t tag8     = (int8_t)bs[cnt];
+    bytestream2_init(&gb, avpkt->data, avpkt->size);
+
+    while (bytestream2_tell(&gb) < avpkt->size) {
+        /* Bit weird but implement the tag parsing as the spec says */
+        uint16_t tagu   = bytestream2_get_be16(&gb);
+        int16_t tag     = (int16_t)tagu;
+        int8_t tag8     = (int8_t)(tagu >> 8);
         uint16_t abstag = abs(tag);
         int8_t abs_tag8 = abs(tag8);
-        uint16_t data   = AV_RB16(&bs[cnt + 2]);
+        uint16_t data   = bytestream2_get_be16(&gb);
         if (abs_tag8 >= 0x60 && abs_tag8 <= 0x6f) {
-            av_log(avctx, AV_LOG_DEBUG, "large len %x \n", AV_RB24(&bs[cnt + 1]));
+            av_log(avctx, AV_LOG_DEBUG, "large len %x \n", ((tagu & 0xff) << 16) | data);
         } else if (tag == 20) {
-            av_log(avctx, AV_LOG_DEBUG, "Width %"PRIu16" %x \n", data, cnt);
+            av_log(avctx, AV_LOG_DEBUG, "Width %"PRIu16" \n", data);
             avctx->width = data;
         } else if (tag == 21) {
-            av_log(avctx, AV_LOG_DEBUG, "Height %"PRIu16" %x \n", data, cnt);
+            av_log(avctx, AV_LOG_DEBUG, "Height %"PRIu16" \n", data);
             avctx->height = data;
         } else if (tag == 101) {
             av_log(avctx, AV_LOG_DEBUG, "Bits per component: %"PRIu16" \n", data);
@@ -252,7 +256,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             av_log(avctx, AV_LOG_DEBUG, "Transform-type? %"PRIu16" \n", data);
         } else if (abstag >= 0x4000 && abstag <= 0x40ff) {
             av_log(avctx, AV_LOG_DEBUG, "Small chunk length %"PRIu16" %s \n", data * 4, tag < 0 ? "optional" : "required");
-            cnt += data * 4;
+            bytestream2_skipu(&gb, data * 4);
         } else if (tag == 23) {
             av_log(avctx, AV_LOG_DEBUG, "Skip frame \n");
             av_log(avctx, AV_LOG_ERROR, "Skip frame not supported \n");
@@ -260,9 +264,8 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             break;
         } else if (tag == 2) {
             av_log(avctx, AV_LOG_DEBUG, "tag=2 header - skipping %i tag/value pairs \n", data);
-            for (i = 0; i < data + 1; i++) {
-                av_log(avctx, AV_LOG_DEBUG, "Tag/Value = %x %x \n", AV_RB16(&bs[cnt]), AV_RB16(&bs[cnt + 2]));
-                cnt += 4;
+            for (i = 0; i < data; i++) {
+                av_log(avctx, AV_LOG_DEBUG, "Tag/Value = %x %x \n", bytestream2_get_be16(&gb), bytestream2_get_be16(&gb));
             }
         } else if (tag == 41) {
             s->plane[s->channel_num].band[s->level][s->subband_num].width  = data;
@@ -286,7 +289,6 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             av_log(avctx, AV_LOG_DEBUG, "Other codebook? %i \n", s->codebook);
         } else
             av_log(avctx, AV_LOG_DEBUG,  "Unknown tag %i data %x \n", tag, data);
-        cnt += 4;
 
         coeff_data = subband[s->channel_num][s->subband_num_actual];
 
@@ -294,14 +296,19 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         if (tag == 4 && data == 0xf0f) {
             int lowpass_height = s->plane[s->channel_num].band[0][0].height;
             int lowpass_width  = s->plane[s->channel_num].band[0][0].width;
-            uint16_t coeffs    = 0;
+
+            if (lowpass_width * lowpass_height * sizeof(int16_t) > bytestream2_get_bytes_left(&gb)) {
+                av_log(avctx, AV_LOG_ERROR, "Too many lowpass coefficients \n");
+                ret = AVERROR(EINVAL);
+                goto end;
+            }
+
             av_log(avctx, AV_LOG_DEBUG, "Start of lowpass coeffs component %"PRIu16" \n", s->channel_num);
             for (i = 0; i < lowpass_height; i++) {
                 for (j = 0; j < lowpass_width; j++) {
-                    coeff_data[j] = AV_RB16(&bs[cnt]);
+                    coeff_data[j] = AV_RB16(gb.buffer);
 
-                    coeffs++;
-                    cnt += 2;
+                    gb.buffer += 2;
                 }
                 coeff_data += lowpass_width;
             }
@@ -313,7 +320,7 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
                        lowpass_width * sizeof(*coeff_data));
             }
 
-            av_log(avctx, AV_LOG_DEBUG, "Lowpass coefficients %"PRIu16" \n", coeffs);
+            av_log(avctx, AV_LOG_DEBUG, "Lowpass coefficients %"PRIu16" \n", lowpass_width * lowpass_height);
         }
 
         if (tag == 55 && s->subband_num_actual != 255) {
@@ -321,11 +328,11 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             int highpass_stride = s->plane[s->channel_num].band[s->level][s->subband_num].stride;
             int expected = highpass_height * highpass_stride;
             int level, run, coeff;
-            int count = 0;
+            int count = 0, bytes;
 
             av_log(avctx, AV_LOG_DEBUG, "Start subband coeffs plane %i level %i codebook %i expected %i \n", s->channel_num, s->level, s->codebook, expected);
 
-            init_get_bits(&s->gb, &bs[cnt], (avpkt->size - cnt) * 8);
+            init_get_bits(&s->gb, gb.buffer, bytestream2_get_bytes_left(&gb) * 8);
             OPEN_READER(re, &s->gb);
             if (!s->codebook) {
                 for (;;) {
@@ -369,11 +376,19 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
             CLOSE_READER(re, &s->gb);
 
             if (count > expected) {
-                av_log(avctx, AV_LOG_ERROR, "Escape codeword not found, probably corrupt data");
-                break;
+                av_log(avctx, AV_LOG_ERROR, "Escape codeword not found, probably corrupt data \n");
+                ret = AVERROR(EINVAL);
+                goto end;
             }
 
-            cnt += FFALIGN(FF_CEIL_RSHIFT(get_bits_count(&s->gb), 3), 4);
+            bytes = FFALIGN(FF_CEIL_RSHIFT(get_bits_count(&s->gb), 3), 4);
+            if (bytes > bytestream2_get_bytes_left(&gb)) {
+                av_log(avctx, AV_LOG_ERROR, "Bitstream overread error \n");
+                ret = AVERROR(EINVAL);
+                goto end;
+            } else
+                gb.buffer += bytes;
+
             av_log(avctx, AV_LOG_DEBUG, "End subband coeffs %i extra %i %p \n", count, count - expected, subband[s->subband_num_actual]);
             s->codebook = 0;
 
