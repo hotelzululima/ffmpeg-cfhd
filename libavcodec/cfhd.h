@@ -53,12 +53,8 @@ typedef struct Plane {
     int height;
     ptrdiff_t stride;
 
-    int idwt_width;
-    int idwt_height;
-    int idwt_stride;
-    uint8_t *idwt_buf;
-    uint8_t *idwt_buf_base;
-    uint8_t *idwt_tmp;
+    int16_t *idwt_buf;
+    int16_t *idwt_tmp;
 
     SubBand band[DWT_LEVELS][4];
 } Plane;

@@ -121,8 +121,6 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
     GetByteContext gb;
     AVFrame *pic = data;
     int ret = 0, i, j;
-    int16_t *plane[3] = {NULL};
-    int16_t *tmp[3] = {NULL};
     int16_t *subband[3][10] = {{0}};
     int16_t *l_h[3][8];
     int16_t *coeff_data;
@@ -146,32 +144,32 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
         w2 = w4 * 2;
         h2 = h4 * 2;
 
-        plane[i] = av_malloc(height * stride * sizeof(*plane[i]));
-        tmp[i]   = av_malloc(height * stride * sizeof(*tmp[i]));
-        if (!plane[i] || !tmp[i]) {
+        s->plane[i].idwt_buf = av_malloc(height * stride * sizeof(*s->plane[i].idwt_buf));
+        s->plane[i].idwt_tmp = av_malloc(height * stride * sizeof(*s->plane[i].idwt_tmp));
+        if (!s->plane[i].idwt_buf || !s->plane[i].idwt_tmp) {
             ret = AVERROR(ENOMEM);
             goto end;
         }
 
-        subband[i][0] = plane[i];
-        subband[i][1] = plane[i] + 2 * w8 * h8;
-        subband[i][2] = plane[i] + 1 * w8 * h8;
-        subband[i][3] = plane[i] + 3 * w8 * h8;
-        subband[i][4] = plane[i] + 2 * w4 * h4;
-        subband[i][5] = plane[i] + 1 * w4 * h4;
-        subband[i][6] = plane[i] + 3 * w4 * h4;
-        subband[i][7] = plane[i] + 2 * w2 * h2;
-        subband[i][8] = plane[i] + 1 * w2 * h2;
-        subband[i][9] = plane[i] + 3 * w2 * h2;
+        subband[i][0] = s->plane[i].idwt_buf;
+        subband[i][1] = s->plane[i].idwt_buf + 2 * w8 * h8;
+        subband[i][2] = s->plane[i].idwt_buf + 1 * w8 * h8;
+        subband[i][3] = s->plane[i].idwt_buf + 3 * w8 * h8;
+        subband[i][4] = s->plane[i].idwt_buf + 2 * w4 * h4;
+        subband[i][5] = s->plane[i].idwt_buf + 1 * w4 * h4;
+        subband[i][6] = s->plane[i].idwt_buf + 3 * w4 * h4;
+        subband[i][7] = s->plane[i].idwt_buf + 2 * w2 * h2;
+        subband[i][8] = s->plane[i].idwt_buf + 1 * w2 * h2;
+        subband[i][9] = s->plane[i].idwt_buf + 3 * w2 * h2;
 
-        l_h[i][0] = tmp[i];
-        l_h[i][1] = tmp[i] + 2 * w8 * h8;
+        l_h[i][0] = s->plane[i].idwt_tmp;
+        l_h[i][1] = s->plane[i].idwt_tmp + 2 * w8 * h8;
         //l_h[i][2] = ll2;
-        l_h[i][3] = tmp[i];
-        l_h[i][4] = tmp[i] + 2 * w4 * h4;
+        l_h[i][3] = s->plane[i].idwt_tmp;
+        l_h[i][4] = s->plane[i].idwt_tmp + 2 * w4 * h4;
         //l_h[i][5] = ll1;
-        l_h[i][6] = tmp[i];
-        l_h[i][7] = tmp[i] + 2 * w2 * h2;
+        l_h[i][6] = s->plane[i].idwt_tmp;
+        l_h[i][7] = s->plane[i].idwt_tmp + 2 * w2 * h2;
     }
 
     init_frame_defaults(s);
@@ -527,8 +525,8 @@ static int cfhd_decode(AVCodecContext *avctx, void *data, int *got_frame,
 
 end:
     for (i = 0; i < 3; i++) {
-        av_freep(&plane[i]);
-        av_freep(&tmp[i]);
+        av_freep(&s->plane[i].idwt_buf);
+        av_freep(&s->plane[i].idwt_tmp);
     }
 
     if (ret < 0)
