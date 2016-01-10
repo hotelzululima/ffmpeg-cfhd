@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Kieran Kunhya
+ * Copyright (c) 2015-2016 Kieran Kunhya <kieran@kunhya.com>
  *
  * This file is part of FFmpeg.
  *
