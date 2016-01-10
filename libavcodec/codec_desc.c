@@ -1526,6 +1526,7 @@ static const AVCodecDescriptor codec_descriptors[] = {
         .type      = AVMEDIA_TYPE_VIDEO,
         .name      = "cfhd",
         .long_name = NULL_IF_CONFIG_SMALL("Cineform HD"),
+        .props     = AV_CODEC_PROP_LOSSY,
     },
 
     /* various PCM "codecs" */
